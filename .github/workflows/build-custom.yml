@@ -8,43 +8,50 @@ on:
         required: true
         default: 'https://default.example.com/file.img.gz'
 
+# 1. 显式添加权限，确保 Release 发布正常
+permissions:
+  contents: write
+
 jobs:
   build-release:
     name: "Build and Release"
-    runs-on: "ubuntu-22.04"
+    runs-on: "ubuntu-latest" # 2. 使用 latest 避免旧环境问题
 
     steps:
       - name: "Checking out git repository"
-        uses: actions/checkout@v2
+        # 3. 升级到 v4，彻底解决 Node 版本兼容问题
+        uses: actions/checkout@v4
 
       - name: Set executable permissions
+        shell: bash
         run: |
           chmod +x "${{ github.workspace }}/custom.sh"
           chmod +x "${{ github.workspace }}/supportFiles/custom/build.sh"
 
       - name: Validate Download URL
+        shell: bash
         run: |
           DEFAULT_URL="https://default.example.com/file.img.gz"
           USER_INPUT_URL="${{ github.event.inputs.download_url }}"
           
           if [[ "$USER_INPUT_URL" == "$DEFAULT_URL" ]]; then
-            echo "❌ 错误：请修改默认下载地址！当前地址为无效占位符。"
+            echo "❌ 错误：请修改默认下载地址！"
             exit 1
           fi
           
-          if [[ ! "$USER_INPUT_URL" =~ ^https?://.+\.[gG][zZ]$|^https?://.+\.[xX][zZ]$|^https?://.+\.[zZ][iI][pP]$ ]]; then
+          # 正则表达式验证
+          if [[ ! "$USER_INPUT_URL" =~ ^https?://.+\.(gz|xz|zip)$ ]]; then
             echo "❌ 错误：地址需以 http(s) 开头且扩展名为 .gz/.xz/.zip"
-            echo "当前输入：$USER_INPUT_URL"
             exit 1
           fi
 
       - name: "Build Image"
+        shell: bash
         run: |
-          download_url="${{ github.event.inputs.download_url }}"
-          ./custom.sh "$download_url"
+          ./custom.sh "${{ github.event.inputs.download_url }}"
 
       - name: "Publish"
-        uses: softprops/action-gh-release@v2.2.1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: "Custom-Installer-x86_64-ISO"
           body_path: "${{ github.workspace }}/supportFiles/custom/info.md"
